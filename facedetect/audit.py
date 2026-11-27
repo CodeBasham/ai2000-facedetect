@@ -35,7 +35,27 @@ def detection_rate_by_group(detector, manifest_rows, images_dir):
     here, and pretending otherwise would hide the effect you are looking for
     behind a second failure mode.
     """
-    raise NotImplementedError("L5: detection_rate_by_group")
+# face finder from L3
+    from .faces import detect_faces
+
+# counts per group
+    hits, totals = {}, {}
+
+    for row in manifest_rows:
+# one row of faces.csv
+        g = row["group"]
+
+# add to the group total
+        totals[g] = totals.get(g, 0) + 1
+
+# run the detector
+        found = detect_faces(detector, Path(images_dir) / row["filename"])
+
+# hit = found any face
+        hits[g] = hits.get(g, 0) + (1 if found else 0)
+
+# rate per group (near 1.0, far about 0.07)
+    return {g: hits[g] / totals[g] for g in totals}
 
 
 def worst_group(rates):
@@ -44,4 +64,5 @@ def worst_group(rates):
     `rates` is the dict `detection_rate_by_group` returns. Ties break
     alphabetically, so the answer is deterministic.
     """
-    raise NotImplementedError("L5: worst_group")
+# lowest rate wins, ties go alphabetical
+    return sorted(rates, key=lambda g: (rates[g], g))[0]

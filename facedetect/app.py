@@ -46,4 +46,61 @@ def process(image, faces, mode="blur"):
 
     Boxes can run past the edge of the frame. Clip them before you index.
     """
-    raise NotImplementedError("L4: process")
+# Pillow does the blur
+    from PIL import Image, ImageFilter
+
+# make sure it's a uint8 array
+    image = np.asarray(image, dtype=np.uint8)
+
+# height and width
+    h, w = image.shape[:2]
+
+# copy so the original isn't changed
+    out = image.copy()
+
+# marks pixels inside face boxes (for coverage)
+    covered = np.zeros((h, w), dtype=bool)
+
+# faces changed
+    n = 0
+
+    for box in faces:
+# box corners as ints
+        x1, y1, x2, y2 = (int(round(v)) for v in box)
+
+# clip box to the image
+        x1, x2 = max(0, min(x1, w)), max(0, min(x2, w))
+        y1, y2 = max(0, min(y1, h)), max(0, min(y2, h))
+
+# skip empty boxes
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        n += 1
+# mark face area
+        covered[y1:y2, x1:x2] = True
+
+        if mode == "blur":
+# blur the face area and put it back
+            patch = Image.fromarray(out[y1:y2, x1:x2])
+# bigger face, stronger blur
+            radius = max(4, (x2 - x1) // 6)
+            out[y1:y2, x1:x2] = np.asarray(patch.filter(ImageFilter.GaussianBlur(radius)))
+        else:
+# other modes: draw a box outline
+            t = max(2, (x2 - x1) // 60)
+# orange for count, blue for overlay
+            colour = np.array([255, 200, 0] if mode == "count" else [0, 220, 255], dtype=np.uint8)
+# top
+            out[y1:y1 + t, x1:x2] = colour
+# bottom
+            out[y2 - t:y2, x1:x2] = colour
+# left
+            out[y1:y2, x1:x1 + t] = colour
+# right
+            out[y1:y2, x2 - t:x2] = colour
+
+# report: face count, mode, fraction of image that is face
+    report = {"n_faces": int(n), "mode": str(mode),
+              "coverage": float(covered.mean()) if h and w else 0.0}
+    return out, report
